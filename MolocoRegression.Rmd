@@ -1,0 +1,212 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+# ---------------Analytics-----------------------------------------------------------
+library(data.table)
+
+DT = fread('Adops & Data Scientist Sample Data - Q1 Analytics.csv')
+DT[,.N]
+names(DT)
+
+#Q1
+DT_BDV = DT[country_id=="BDV"]
+
+vlist1 = c("user_id", "site_id")
+DT_BDV[,.("user_id","site_id")]
+
+unique(DT[,c("site_id")])
+unique(DT[,c("country_id")])
+
+DT_BDV[,.(num_users=uniqueN(user_id)),by="site_id"][order(-num_users)]
+
+#Q2
+Dt_q2 = DT[ts>'2019-02-03 00:00:00' & ts < '2019-02-04 23:59:59']
+Dt_q2[,.N,by=c("site_id","user_id")][order(-N)][1:4]
+
+#Q3
+DT[,uniqueN(user_id)]  #Total unique users = 1916
+
+DT_userLastSite = DT[,.(Last_site = last(site_id)),by="user_id"]
+
+DT_userLastSite[,.N,by="Last_site"][order(-N)][1:3]
+
+#Q4
+DT_userFirstLastSite = DT[,.(First_site = first(site_id),Last_site=last(site_id)),by="user_id"]
+DT_userFirstLastSite[First_site==Last_site,.N]
+#Ans : 1670
+```
+```{r}
+#-------------------Regression----------------------------------------
+dataset = read.csv('Adops & Data Scientist Sample Data - Q2 Regression.csv')
+colnames(dataset) <- c("A","B","C")
+
+#Data Exploration
+summary(dataset)
+
+```
+
+```{r}
+#plots
+library(ggplot2)
+ggplot() +
+  geom_point(aes(x = dataset$A, y = dataset$C),colour = 'red') +
+  ggtitle('C By A') +xlab('A') +ylab('C')
+
+```
+```{r}
+ggplot() +
+  geom_point(aes(x = dataset$B, y = dataset$C),colour = 'Blue') +
+  ggtitle('C By B') +xlab('B') +ylab('C')
+```
+
+```{r}
+hist(dataset$C)
+```
+
+
+```{r}
+#we observed that there is just 1 outlier (c=-10000), which is skewing the model. We drop that datapoint .
+typeof(dataset)
+dataset1 = dataset[dataset$C!= -10000,]
+
+ggplot() +
+  geom_point(aes(x = dataset1$A, y = dataset1$C),colour = 'red') +
+  ggtitle('C Vs A') +xlab('A') +ylab('C')
+```
+
+```{r}
+ggplot() +
+  geom_point(aes(x = dataset1$B, y = dataset1$C),colour = 'Blue') +
+  ggtitle('C Vs B') +xlab('B') +ylab('C')
+```
+```{r}
+#By eyeballing, we see that, C is linearly dependent on B, but not with A.
+#Nevetheless we try a simple linear model
+model1 <- lm(C ~ A + B , data = dataset1)
+summary(model1)
+
+# we see that B is statistically signicant But not A. and R-squared is low
+```
+```{r}
+# we further proceed to create a polynomial model
+library(caTools)
+library(Metrics)
+library(stargazer)
+dataset1$A2 = dataset1$A^2
+dataset1$A3 = dataset1$A^3
+dataset1$A4 = dataset1$A^4
+dataset1$A5 = dataset1$A^5
+
+
+#split data into training and test data sets
+split = sample.split(dataset1$C, SplitRatio = 0.8)
+training_set = subset(dataset1, split == TRUE)
+test_set = subset(dataset1, split == FALSE)
+
+
+# Feature Scaling (Normalize the data)
+training_set = scale(training_set)
+test_set = scale(test_set)
+```
+```{r}
+df_training = data.frame(training_set)
+df_test = data.frame(test_set)
+
+cor(dataset1$A,dataset1$B)  # Weak negative relationship between the 2 X variables. Hence both the variables can be kept in the model.
+
+model2 <- lm(C ~ A + B , data = df_training)
+summary(model2)
+# Predicting the Test set results
+y_pred = predict(model2, newdata = df_test)
+
+
+rmse(df_test$C, y_pred)
+mse(df_test$C, y_pred)
+mae(df_test$C, y_pred)
+
+library(lmtest)
+gqtest(model2)
+bptest(model2)
+
+#GQ-test and BP-test indicate no heteroskadasticity
+
+```
+```{r}
+hist(dataset1$A)
+hist(dataset1$B)
+hist(dataset1$C)
+#Based on the histograms try log-log model
+model3 <- lm(C ~ log(A) + B , data = df_training)
+# we lose a lot of Data in NaNs.
+```
+```{r}
+#df_training_set = data.frame(training_set)
+#df_test_set = data.frame(test_set)
+model3 <- lm(C ~ A2 +  B , data = df_training_set)
+model4 <- lm(C ~ A2 + A + B , data = df_training)
+model5 <- lm(C ~ A3 + A2 + A + B , data = df_training)
+model6 <- lm(C ~ A4 + A3 + A2 + A + B , data = df_training)
+model7 <- lm(C ~ A5 + A4 + A3 + A2 + A + B , data = df_training_set)
+
+summary(model7)
+
+stargazer(model3, model4, model5, model6, model7,
+          title = "Regression Results", type="text",
+          column.labels=c("model3","model4", "model5", "model6", "model7"),digits=2)
+
+#Model 3 has a significant result. By adding additional polynomial terms the Adj. R2 goes down. So we are not improving the fit by adding additional terms till model6.
+# With model7, both our R2 and Adj. R2 are improving. So we choose Model 7
+
+
+```
+
+
+```{r}
+# Visualising the Linear Regression results
+# install.packages('ggplot2')
+library(ggplot2)
+ggplot() +
+  geom_point(aes(x = df_test_set$A + df_test_set$A , y = df_test_set$C),
+             colour = 'red') +
+  geom_line(aes(x = df_test_set$A + df_test_set$A, y = predict(model2, newdata = df_test_set)),
+            colour = 'blue') +
+  ggtitle('Linear Regression') +
+  xlab('A+B') +
+  ylab('C')
+```
+
+
+```{r}
+# Predict on the test set with the model trained
+# Red dots are Actual values
+# Blue line represents the predicted model values
+library(ggplot2)
+ggplot() +
+  geom_point(aes(x = df_test_set$A, y = df_test_set$C),
+             colour = 'red') +
+  geom_line(aes(x = df_test_set$A, y = predict(model7, newdata = df_test_set)),
+            colour = 'blue') +
+  ggtitle('Polynomial Regression') +
+  xlab('A5 + A4 + A3 + A2 + A + B') +
+  ylab('C')
+```
+
+
+
+
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
