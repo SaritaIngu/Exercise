@@ -78,13 +78,13 @@ dataset1 = dataset[dataset$C!= -10000,]
 
 ggplot() +
   geom_point(aes(x = dataset1$A, y = dataset1$C),colour = 'red') +
-  ggtitle('C Vs A') +xlab('A') +ylab('C')
+  ggtitle('C By A') +xlab('A') +ylab('C')
 ```
 
 ```{r}
 ggplot() +
   geom_point(aes(x = dataset1$B, y = dataset1$C),colour = 'Blue') +
-  ggtitle('C Vs B') +xlab('B') +ylab('C')
+  ggtitle('C By B') +xlab('B') +ylab('C')
 ```
 ```{r}
 #By eyeballing, we see that, C is linearly dependent on B, but not with A.
@@ -103,6 +103,7 @@ dataset1$A2 = dataset1$A^2
 dataset1$A3 = dataset1$A^3
 dataset1$A4 = dataset1$A^4
 dataset1$A5 = dataset1$A^5
+dataset1$AB = dataset1$A * dataset1$B
 
 
 #split data into training and test data sets
@@ -149,11 +150,11 @@ model3 <- lm(C ~ log(A) + B , data = df_training)
 ```{r}
 #df_training_set = data.frame(training_set)
 #df_test_set = data.frame(test_set)
-model3 <- lm(C ~ A2 +  B , data = df_training_set)
+model3 <- lm(C ~ A2 +  B , data = df_training)
 model4 <- lm(C ~ A2 + A + B , data = df_training)
 model5 <- lm(C ~ A3 + A2 + A + B , data = df_training)
 model6 <- lm(C ~ A4 + A3 + A2 + A + B , data = df_training)
-model7 <- lm(C ~ A5 + A4 + A3 + A2 + A + B , data = df_training_set)
+model7 <- lm(C ~ A5 + A4 + A3 + A2 + A + B , data = df_training)
 
 summary(model7)
 
@@ -161,9 +162,25 @@ stargazer(model3, model4, model5, model6, model7,
           title = "Regression Results", type="text",
           column.labels=c("model3","model4", "model5", "model6", "model7"),digits=2)
 
+stargazer(model3, model7,
+          title = "Regression Results", type="text",
+          column.labels=c("model3", "model7"),digits=2)
+
+
+#---------------Final Model (R2=0.77)--------------------------
+
+model8 <- lm(C ~ A +  B + AB, data = df_training)
+summary(model8)
+
+stargazer(model8,
+          title = "Regression Results", type="text",
+          column.labels=c("model8 (C ~ A +  B + AB)"),digits=2)
+
+
+model9 <- lm(C ~ B + AB, data = df_training)
+summary(model9)
 #Model 3 has a significant result. By adding additional polynomial terms the Adj. R2 goes down. So we are not improving the fit by adding additional terms till model6.
 # With model7, both our R2 and Adj. R2 are improving. So we choose Model 7
-
 
 ```
 
@@ -173,29 +190,46 @@ stargazer(model3, model4, model5, model6, model7,
 # install.packages('ggplot2')
 library(ggplot2)
 ggplot() +
-  geom_point(aes(x = df_test_set$A + df_test_set$A , y = df_test_set$C),
+  geom_point(aes(x = df_test$A , y = df_test$C),
              colour = 'red') +
-  geom_line(aes(x = df_test_set$A + df_test_set$A, y = predict(model2, newdata = df_test_set)),
+  geom_line(aes(x = df_test$A, y = predict(model2, newdata = df_test)),
             colour = 'blue') +
-  ggtitle('Linear Regression') +
-  xlab('A+B') +
+  ggtitle('Linear Regression - Model (C ~ A + B)') +
+  xlab('A') +
   ylab('C')
 ```
 
-
+```{r}
+library(ggplot2)
+ggplot() +
+  geom_point(aes(x = df_test$B, y = df_test$C),
+             colour = 'red') +
+  geom_line(aes(x = df_test$B, y = predict(model7, newdata = df_test)),
+            colour = 'blue') +
+  ggtitle('Polynomial Regression - Model (C ~ A5 + A4 + A3 + A2 + A + B)') +
+  xlab('B') +
+  ylab('C')
+```
 ```{r}
 # Predict on the test set with the model trained
 # Red dots are Actual values
 # Blue line represents the predicted model values
 library(ggplot2)
 ggplot() +
-  geom_point(aes(x = df_test_set$A, y = df_test_set$C),
+  geom_point(aes(x = df_test$AB, y = df_test$C),
              colour = 'red') +
-  geom_line(aes(x = df_test_set$A, y = predict(model7, newdata = df_test_set)),
+  geom_line(aes(x = df_test$AB, y = predict(model8, newdata = df_test)),
             colour = 'blue') +
-  ggtitle('Polynomial Regression') +
-  xlab('A5 + A4 + A3 + A2 + A + B') +
+  ggtitle('Polynomial Regression - Model (C ~ A + B + AB) - Prediction with Test Set') +
+  xlab('AB') +
   ylab('C')
+
+y_pred_C_8 = predict(model8, newdata = df_test)
+y_pred_C_7 = predict(model7, newdata = df_test)
+
+
+tbl_true_pred_8 = data.frame(df_test$C,y_pred_C_8)
+tbl_true_pred_7 = data.frame(df_test$C,y_pred_C_7)
 ```
 
 
